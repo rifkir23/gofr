@@ -33,7 +33,6 @@ func newStaleClient(t *testing.T) (*kafkaClient, *MockConnection) {
 			conns: []Connection{stale},
 		},
 		logger: logging.NewMockLogger(logging.DEBUG),
-		mu:     &sync.RWMutex{},
 	}
 
 	return k, stale

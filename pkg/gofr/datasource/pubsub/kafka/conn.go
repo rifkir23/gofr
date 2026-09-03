@@ -51,7 +51,19 @@ func (k *kafkaClient) initialize(ctx context.Context) error {
 	// writer and reader are not guarded by connMu — k.mu protects the
 	// reader map; writer is set once and never swapped.
 	k.writer = writer
-	k.reader = reader
+
+	// retryConnect calls initialize from its own goroutine, so this swap can
+	// land while a Subscribe is reading or growing the map. Take k.mu for it,
+	// the same lock Subscribe uses, and keep any readers a concurrent
+	// Subscribe already created rather than dropping them on the floor —
+	// their committers are already handed out to callers.
+	k.mu.Lock()
+
+	if k.reader == nil {
+		k.reader = reader
+	}
+
+	k.mu.Unlock()
 
 	return nil
 }

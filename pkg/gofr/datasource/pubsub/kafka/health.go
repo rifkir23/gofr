@@ -98,9 +98,24 @@ func checkBroker(conn Connection, controllerAddr *string) map[string]any {
 }
 
 func (k *kafkaClient) getReaderStatsAsMap() []any {
-	readerStats := make([]any, 0)
+	// Snapshot the readers under RLock. Health runs on every probe while
+	// Subscribe may be growing the map under the write lock, so ranging over
+	// k.reader directly is the same concurrent map read/write as #3500.
+	// Stats() is collected outside the lock: it is internally synchronized,
+	// and holding k.mu across it would block every Subscribe for the length
+	// of a health check.
+	k.mu.RLock()
 
+	readers := make([]Reader, 0, len(k.reader))
 	for _, reader := range k.reader {
+		readers = append(readers, reader)
+	}
+
+	k.mu.RUnlock()
+
+	readerStats := make([]any, 0, len(readers))
+
+	for _, reader := range readers {
 		var readerStat map[string]any
 		if err := convertStructToMap(reader.Stats(), &readerStat); err != nil {
 			k.logger.Errorf("kafka Reader Stats processing failed: %v", err)

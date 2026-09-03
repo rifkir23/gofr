@@ -56,8 +56,18 @@ func validateRequiredFields(conf *Config) error {
 
 // retryConnect handles the retry mechanism for connecting to the Kafka broker.
 func (k *kafkaClient) retryConnect(ctx context.Context) {
+	timer := time.NewTimer(defaultRetryTimeout)
+	defer timer.Stop()
+
 	for {
-		time.Sleep(defaultRetryTimeout)
+		select {
+		case <-k.closed:
+			return
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			timer.Reset(defaultRetryTimeout)
+		}
 
 		err := k.initialize(ctx)
 		if err != nil {
